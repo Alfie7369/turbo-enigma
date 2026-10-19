@@ -50,13 +50,24 @@ jobs:
           for item in items:
               file_id = item['id']
               file_name = item['name']
+              mime_type = item['mimeType']
+
+              # Skip folders and Google Workspace native files
+              if mime_type == 'application/vnd.google-apps.folder' or mime_type.startswith('application/vnd.google-apps.'):
+                  print(f'Skipping non-binary item: {file_name}')
+                  continue
+
               print(f'Downloading: {file_name}')
-              request = service.files().get_media(fileId=file_id)
-              fh = open(os.path.join('notes', file_name), 'wb')
-              downloader = MediaIoBaseDownload(fh, request)
-              done = False
-              while not done:
-                  _, done = downloader.next_chunk()
+              try:
+                  request = service.files().get_media(fileId=file_id)
+                  fh = open(os.path.join('notes', file_name), 'wb')
+                  downloader = MediaIoBaseDownload(fh, request)
+                  done = False
+                  while not done:
+                      _, done = downloader.next_chunk()
+                  fh.close()
+              except Exception as e:
+                  print(f'Failed to download {file_name}: {e}')
           "
 
       - name: Commit and push changes
