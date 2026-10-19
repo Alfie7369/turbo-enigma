@@ -3,19 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Cloudflare Site</title>
+    <title>Alfie's Mathematics Notes</title>
     <style>
         body {
             font-family: system-ui, -apple-system, sans-serif;
-            text-align: center;
-            margin-top: 20vh;
-            color: #333;
+            max-width: 650px;
+            margin: 50px auto;
+            padding: 0 20px;
+            color: #24292e;
+            line-height: 1.6;
+            background-color: #f6f8fa;
+        }
+        .container {
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h1 { border-bottom: 2px solid #eaeaea; padding-bottom: 12px; margin-top: 0; color: #0366d6; }
+        h2 { font-size: 1.25rem; margin-top: 25px; color: #24292e; }
+        p { color: #586069; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 12px; }
+        a { color: #0366d6; text-decoration: none; font-weight: 500; }
+        a:hover { text-decoration: underline; }
+        .module-code {
+            display: inline-block;
+            background: #e1f5fe;
+            color: #0277bd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-right: 8px;
         }
     </style>
 </head>
 <body>
-    <h1>Hello, World!</h1>
-    <p>My site is hosted on GitHub and secured by Cloudflare.</p>
+    <div class="container">
+        <h1>University Mathematics Notes</h1>
+        <p>Automated daily sync from Goodnotes & Google Drive for Year 2 mathematics modules at the University of Nottingham[cite: 1].</p>
+        
+        <h2>Active Modules</h2>
+        <ul>
+            <li>
+                <span class="module-code">MATH2103</span> 
+                <a href="notes/MATH2103.pdf" target="_blank">Algebra and Number Theory Notes</a>[cite: 1]
+            </li>
+            <li>
+                <span class="module-code">MATH2108</span> 
+                <a href="notes/MATH2108.pdf" target="_blank">Statistics Notes</a>
+            </li>
+        </ul>
+    </div>
 </body>
 </html>
-
