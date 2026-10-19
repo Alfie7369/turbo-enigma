@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: pip install google-api-python-client google-auth
@@ -31,18 +31,18 @@ jobs:
           from googleapiclient.discovery import build
           from googleapiclient.http import MediaIoBaseDownload
 
-          # Authenticate using secret key
           creds_dict = json.loads(os.environ['GCP_SA_KEY'])
           creds = service_account.Credentials.from_service_account_info(
               creds_dict, scopes=['https://www.googleapis.com/auth/drive.readonly']
           )
           service = build('drive', 'v3', credentials=creds)
 
-          # List files in the folder
           folder_id = os.environ['GDRIVE_FOLDER_ID']
+          query_str = f\"'{folder_id}' in parents and trashed=false\"
+          
           results = service.files().list(
-              q=f\"'{{folder_id}}' in parents and trashed=false\",
-              pageSize=100, fields=\"files(id, name, mimeType)\"
+              q=query_str,
+              pageSize=100, fields='files(id, name, mimeType)'
           ).execute()
           items = results.get('files', [])
 
@@ -50,7 +50,7 @@ jobs:
           for item in items:
               file_id = item['id']
               file_name = item['name']
-              print(f'Downloading: {{file_name}}')
+              print(f'Downloading: {file_name}')
               request = service.files().get_media(fileId=file_id)
               fh = open(os.path.join('notes', file_name), 'wb')
               downloader = MediaIoBaseDownload(fh, request)
