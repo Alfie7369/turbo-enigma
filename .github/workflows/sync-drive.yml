@@ -1,0 +1,68 @@
+name: Sync Google Drive Notes
+
+on:
+  schedule:
+    - cron: '0 4 * * *' # Runs every day at 4:00 AM UTC
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install google-api-python-client google-auth
+
+      - name: Download files from Google Drive
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          python -c "
+          import os, json
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaIoBaseDownload
+
+          # Authenticate using secret key
+          creds_dict = json.loads(os.environ['GCP_SA_KEY'])
+          creds = service_account.Credentials.from_service_account_info(
+              creds_dict, scopes=['https://www.googleapis.com/auth/drive.readonly']
+          )
+          service = build('drive', 'v3', credentials=creds)
+
+          # List files in the folder
+          folder_id = os.environ['GDRIVE_FOLDER_ID']
+          results = service.files().list(
+              q=f\"'{{folder_id}}' in parents and trashed=false\",
+              pageSize=100, fields=\"files(id, name, mimeType)\"
+          ).execute()
+          items = results.get('files', [])
+
+          os.makedirs('notes', exist_ok=True)
+          for item in items:
+              file_id = item['id']
+              file_name = item['name']
+              print(f'Downloading: {{file_name}}')
+              request = service.files().get_media(fileId=file_id)
+              fh = open(os.path.join('notes', file_name), 'wb')
+              downloader = MediaIoBaseDownload(fh, request)
+              done = False
+              while not done:
+                  _, done = downloader.next_chunk()
+          "
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name 'GitHub Action Bot'
+          git config --global user.email 'action@github.com'
+          git add notes/
+          git diff --staged --quiet || git commit -m "Auto-sync notes from Google Drive"
+          git push
