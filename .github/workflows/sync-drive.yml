@@ -7,10 +7,10 @@ on:
 
 jobs:
   sync:
-  
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # Required to commit and push changes back to the repo
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,34 +34,35 @@ jobs:
           from googleapiclient.discovery import build
           from googleapiclient.http import MediaIoBaseDownload
 
-          creds_dict = json.loads(os.environ['GCP_SA_KEY'])
-          creds = service_account.Credentials.from_service_account_info(
-              creds_dict, scopes=['https://www.googleapis.com/auth/drive.readonly']
-          )
-          service = build('drive', 'v3', credentials=creds)
+          try:
+              creds_dict = json.loads(os.environ['GCP_SA_KEY'])
+              creds = service_account.Credentials.from_service_account_info(
+                  creds_dict, scopes=['https://www.googleapis.com/auth/drive.readonly']
+              )
+              service = build('drive', 'v3', credentials=creds)
 
-          folder_id = os.environ['GDRIVE_FOLDER_ID']
-          query_str = f\"'{folder_id}' in parents and trashed=false\"
-          
-          results = service.files().list(
-              q=query_str,
-              pageSize=100, fields='files(id, name, mimeType)'
-          ).execute()
-          items = results.get('files', [])
+              folder_id = os.environ['GDRIVE_FOLDER_ID']
+              query_str = f\"'{folder_id}' in parents and trashed=false\"
+              
+              results = service.files().list(
+                  q=query_str,
+                  pageSize=100, fields='files(id, name, mimeType)'
+              ).execute()
+              items = results.get('files', [])
+              print(f'Found {len(items)} items in the Google Drive folder.')
 
-          os.makedirs('notes', exist_ok=True)
-          for item in items:
-              file_id = item['id']
-              file_name = item['name']
-              mime_type = item['mimeType']
+              os.makedirs('notes', exist_ok=True)
+              for item in items:
+                  file_id = item['id']
+                  file_name = item['name']
+                  mime_type = item['mimeType']
 
-              # Skip folders and Google Workspace native files
-              if mime_type == 'application/vnd.google-apps.folder' or mime_type.startswith('application/vnd.google-apps.'):
-                  print(f'Skipping non-binary item: {file_name}')
-                  continue
+                  # Skip folders and Google Workspace native files
+                  if mime_type == 'application/vnd.google-apps.folder' or mime_type.startswith('application/vnd.google-apps.'):
+                      print(f'Skipping non-binary item: {file_name} ({mime_type})')
+                      continue
 
-              print(f'Downloading: {file_name}')
-              try:
+                  print(f'Downloading: {file_name}')
                   request = service.files().get_media(fileId=file_id)
                   fh = open(os.path.join('notes', file_name), 'wb')
                   downloader = MediaIoBaseDownload(fh, request)
@@ -69,14 +70,25 @@ jobs:
                   while not done:
                       _, done = downloader.next_chunk()
                   fh.close()
-              except Exception as e:
-                  print(f'Failed to download {file_name}: {e}')
+          except Exception as e:
+              print(f'Error during Google Drive sync: {e}')
+              exit(1)
           "
 
       - name: Commit and push changes
         run: |
           git config --global user.name 'GitHub Action Bot'
           git config --global user.email 'action@github.com'
+          
+          # Pull any remote changes first to prevent fast-forward or merge issues
+          git pull --rebase origin main || git pull --rebase origin master
+          
           git add notes/
-          git diff --staged --quiet || git commit -m "Auto-sync notes from Google Drive"
-          git push
+          
+          # Check if there are actual changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to sync."
+          else
+            git commit -m "Auto-sync notes from Google Drive"
+            git push
+          fi
