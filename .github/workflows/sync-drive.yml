@@ -9,7 +9,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Required to commit and push changes back to the repo
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -29,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: pip install google-api-python-client google-auth
 
-      - name: Download files from Google Drive
+      - name: Download specific files and update website
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
@@ -39,6 +39,15 @@ jobs:
           from google.oauth2 import service_account
           from googleapiclient.discovery import build
           from googleapiclient.http import MediaIoBaseDownload
+
+          # Whitelist of files you want to sync
+          ALLOWED_FILES = {'MATH2103.pdf', 'MATH2108.pdf'}
+          
+          # Custom titles for your website display
+          MODULE_TITLES = {
+              'MATH2103.pdf': 'MATH2103: Algebra and Number Theory',
+              'MATH2108.pdf': 'MATH2108: Statistics'
+          }
 
           try:
               creds_dict = json.loads(os.environ['GCP_SA_KEY'])
@@ -55,17 +64,17 @@ jobs:
                   pageSize=100, fields='files(id, name, mimeType)'
               ).execute()
               items = results.get('files', [])
-              print(f'Found {len(items)} items in the Google Drive folder.')
 
               os.makedirs('notes', exist_ok=True)
+              downloaded_files = []
+
               for item in items:
                   file_id = item['id']
                   file_name = item['name']
-                  mime_type = item['mimeType']
 
-                  # Skip folders and Google Workspace native files
-                  if mime_type == 'application/vnd.google-apps.folder' or mime_type.startswith('application/vnd.google-apps.'):
-                      print(f'Skipping non-binary item: {file_name} ({mime_type})')
+                  # Only download if it's in our allowed list
+                  if file_name not in ALLOWED_FILES:
+                      print(f'Skipping unlisted file: {file_name}')
                       continue
 
                   print(f'Downloading: {file_name}')
@@ -76,19 +85,89 @@ jobs:
                   while not done:
                       _, done = downloader.next_chunk()
                   fh.close()
+                  downloaded_files.append(file_name)
+
+              # Generate index.html strictly for MATH2103 and MATH2108
+              html_content = '''<!DOCTYPE html>
+              <html lang=\"en\">
+              <head>
+                  <meta charset=\"UTF-8\">
+                  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+                  <title>Alfie's Mathematics Notes</title>
+                  <style>
+                      body {
+                          font-family: system-ui, -apple-system, sans-serif;
+                          margin: 0;
+                          padding: 40px 20px;
+                          background-color: #f6f8fa;
+                          color: #24292e;
+                          line-height: 1.6;
+                      }
+                      .container {
+                          max-width: 1000px;
+                          margin: 0 auto;
+                          background: #ffffff;
+                          padding: 40px;
+                          border-radius: 8px;
+                          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                      }
+                      h1 { border-bottom: 2px solid #eaeaea; padding-bottom: 12px; margin-top: 0; color: #0366d6; }
+                      h2 { font-size: 1.25rem; margin-top: 25px; color: #24292e; }
+                      h3 { color: #0366d6; margin-top: 30px; margin-bottom: 10px; }
+                      p { color: #586069; }
+                      iframe {
+                          width: 100%;
+                          border: 1px solid #eaeaea;
+                          border-radius: 8px;
+                          box-sizing: border-box;
+                      }
+                  </style>
+              </head>
+              <body>
+                  <div class="container">
+                      <h1>University Mathematics Notes</h1>
+                      <p>Automated daily sync from Goodnotes & Google Drive for Year 2 mathematics modules.</p>
+                      
+                      <h2>Active Modules</h2>
+              '''
+
+              # Sort to keep them in order (2103 then 2108)
+              downloaded_files.sort()
+              for pdf in downloaded_files:
+                  title = MODULE_TITLES.get(pdf, pdf)
+                  html_content += f'''
+                      <h3>{title}</h3>
+                      <iframe src="notes/{pdf}" height="700px"></iframe>
+                  '''
+
+              html_content += '''    </div>
+              </body>
+              </html>
+              '''
+
+              with open('index.html', 'w', encoding='utf-8') as f:
+                  f.write(html_content)
+              print('Successfully updated index.html')
+
           except Exception as e:
               print(f'Error during Google Drive sync: {e}')
               exit(1)
           "
 
       - name: Commit and push changes
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          git add notes/
+          git config --global user.name 'GitHub Action Bot'
+          git config --global user.email 'action@github.com'
           
-          # Check if there are actual changes to commit
+          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git
+          
+          git add notes/ index.html
+          
           if git diff --staged --quiet; then
             echo "No changes to sync."
           else
-            git commit -m "Auto-sync notes from Google Drive"
+            git commit -m "Auto-sync MATH2103 and MATH2108 notes"
             git push
           fi
